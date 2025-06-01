@@ -1,43 +1,40 @@
 import { z } from 'zod';
-import { ValidationCode } from '../../constants/errorCodes';
+import { ValidationCode } from '../../constants';
+import { FormErrorManager } from '../../core/FormErrorManager';
 import { ValidationError } from '../../errors';
-import { NonEmptyArray } from '../../types';
-import {
-  FormSchemaOptions,
-  SchemaInput,
-  SchemaOutput,
-  UnpackZodType,
-} from './types';
+import { NonEmptyArray, SchemaInput } from '../../types';
+import { buildValidationError } from './buildValidationError';
 import { normalizeZodSchemaOptions } from './normalizeZodSchemaOptions';
+import { AnyZodObject, SchemaOptions } from './types';
 
 /**
- * Core class for managing form state, validation, and data transformation using Zod.
- * It encapsulates the schema, raw input values, validation errors, and provides
+ * Core class for managing form state, validation, and data transformation using **Zod**.
+ * It encapsulates the Zod schema, raw input values, validation errors, and provides
  * methods for updating values, validating, parsing, and observing changes.
- * @template T - The type of the schema options (a record of ZodTypes or ZodType functions).
+ *
+ * @template O - Represents the inferred output type of the Zod schema.
  */
-export class FormSchema<T extends FormSchemaOptions> {
+export class FormSchema<O> {
   // Stores the raw, untransformed input values from the form.
-  private _rawInput: Partial<SchemaInput<T>> = {};
+  private _rawInput: Partial<SchemaInput<O>> = {};
   // The main Zod object schema for the entire form.
-  private _schema: z.AnyZodObject;
+  private _schema: AnyZodObject;
   // Tracks fields that have custom `refine` rules applied,
   // indicating that parsing them requires validating the whole schema.
-  private _refinedFields: Array<keyof T> = [];
+  private _refinedFields: string[] = [];
   // Stores the normalized Zod schemas for each individual field.
-  private _fieldSchemas: { [K in keyof T]: UnpackZodType<T[K]> };
+  private _fieldSchemas: { [K in keyof O]: z.ZodType };
   // Cache for field-specific setter functions to ensure stable references,
   // which is crucial for React performance (e.g., with `React.memo`).
   private _setterCache = new Map<
-    keyof T,
-    (value: SchemaOutput<T>[keyof T]) => void
+    keyof O,
+    (value: SchemaInput<O>[keyof O]) => void
   >();
   // Type-level property for direct inference of the output type from the class instance.
-  public __outputType!: SchemaOutput<T>;
+  public __outputType!: O;
 
-  // Internal store for current validation errors, mapping field path to error message.
-  // Key is the path of the field (eg 'name', 'address.street'), value is the error message.
-  private _errors: Record<string, string | undefined> = {};
+  // Internal store for current validation errors, managed by FormErrorManager.
+  private _errorsManager: FormErrorManager;
 
   // Set of callback functions to notify React components about state changes.
   private _subscribers = new Set<() => void>();
@@ -51,8 +48,8 @@ export class FormSchema<T extends FormSchemaOptions> {
    * @param initialValues Optional initial values to pre-populate the form's raw input.
    */
   constructor(
-    private readonly fieldSchemas: T,
-    initialValues?: Partial<SchemaInput<T>>,
+    private readonly fieldSchemas: SchemaOptions<O>,
+    initialValues?: Partial<SchemaInput<O>>,
     debug?: boolean
   ) {
     this._fieldSchemas = normalizeZodSchemaOptions(fieldSchemas);
@@ -62,6 +59,9 @@ export class FormSchema<T extends FormSchemaOptions> {
     }
     this._debug =
       process.env.NODE_ENV === 'production' ? false : debug || false;
+
+    this._errorsManager = new FormErrorManager(); // Initialize the error manager
+
     if (this._debug) {
       console.log('FormSchema initialized with debug mode.', {
         fieldSchemas,
@@ -93,21 +93,17 @@ export class FormSchema<T extends FormSchemaOptions> {
   }
 
   /**
-   * Retrieves the current validation errors for all fields.
-   * @returns An object mapping field paths to their error messages, or undefined if no error.
+   * Provides access to the FormErrorManager instance for detailed error handling.
    */
-  public getErrors(): Record<string, string | undefined> {
-    // Return a shallow copy to prevent direct mutation of the internal errors state.
-    return { ...this._errors };
+  public get errors(): FormErrorManager {
+    return this._errorsManager;
   }
 
   /**
-   * Retrieves the error message for a specific field.
-   * @param fieldPath The path of the field (e.g., 'name', 'address.street').
-   * @returns The error message string, or undefined if the field has no error.
+   * Indicates whether the form is currently valid (has no errors).
    */
-  public getFieldError(fieldPath: string): string | undefined {
-    return this._errors[fieldPath];
+  public get isValid(): boolean {
+    return !this._errorsManager.hasError();
   }
 
   /**
@@ -116,13 +112,13 @@ export class FormSchema<T extends FormSchemaOptions> {
    * @param field Optional. The name of the specific field to retrieve.
    * @returns The raw input value for the specified field, or the entire raw input object if no field is specified.
    */
-  public getRawValue(): Partial<SchemaInput<T>>;
-  public getRawValue<F extends keyof T>(
+  public getRawValue(): SchemaInput<O>;
+  public getRawValue<F extends keyof O>(
     field: F
-  ): SchemaInput<T>[F] | undefined;
-  public getRawValue<F extends keyof T>(
+  ): SchemaInput<O>[F] | undefined;
+  public getRawValue<F extends keyof O>(
     field?: F
-  ): Partial<SchemaInput<T>> | SchemaInput<T>[F] | undefined {
+  ): SchemaInput<O> | SchemaInput<O>[F] | undefined {
     if (field === undefined) {
       // Return a shallow copy to prevent external modification of the internal state.
       return { ...this._rawInput };
@@ -142,31 +138,33 @@ export class FormSchema<T extends FormSchemaOptions> {
    * or the entire parsed form object if no field is specified.
    * @throws ValidationError if validation fails.
    */
-  public async getValidatedValue(): Promise<SchemaOutput<T>>;
-  public async getValidatedValue<F extends keyof T>(
-    field: F
-  ): Promise<SchemaOutput<T>[F]>;
-  public async getValidatedValue<F extends keyof T>(
+  public async getValidatedValue(): Promise<O>;
+  public async getValidatedValue<F extends keyof O>(field: F): Promise<O[F]>;
+  public async getValidatedValue<F extends keyof O>(
     field?: F
-  ): Promise<SchemaOutput<T> | SchemaOutput<T>[F]> {
+  ): Promise<O | O[F]> {
     if (this._debug) {
       console.log(`getValidatedValue called for field: ${String(field)}`);
     }
     // Clear all errors before attempting full validation for getValidatedValue (since it implies final submission)
-    this._clearErrors();
+    this._errorsManager.clearErrors();
     if (field === undefined) {
       // Case 1: Retrieve entire form data
       const result = await this._schema.safeParseAsync(this._rawInput);
       if (result.success) {
-        this._clearErrors(); // Ensure no lingering errors if previously invalid
+        this._errorsManager.clearErrors(); // Ensure no lingering errors if previously invalid
         this._notifySubscribers();
         if (this._debug) {
           console.log('getValidatedValue (full form) success:', result.data);
         }
-        return result.data as SchemaOutput<T>;
+        return result.data as O;
       }
       // If validation fails for the whole form, throw the error
-      const validationError = this.buildValidationError(result.error);
+      const validationError = buildValidationError(
+        result.error,
+        undefined,
+        this._debug
+      );
       this._updateErrors(validationError); // Update errors for UI
       this._notifySubscribers();
       if (this._debug) {
@@ -197,11 +195,11 @@ export class FormSchema<T extends FormSchemaOptions> {
 
     // If the field is part of a refined schema (affected by a global rule),
     // we must parse the entire schema to ensure correct cross-field validation/transformation.
-    if (this._refinedFields.includes(field)) {
+    if (this._refinedFields.includes(field as string)) {
       const result = await this._schema.safeParseAsync(this._rawInput);
       if (result.success) {
-        const _parsedValue: SchemaOutput<T>[F] = (result.data as any)[field]; // get(result.data, field);
-        this._clearErrors(); // Ensure no lingering errors
+        const _parsedValue: O[F] = (result.data as any)[field]; // get(result.data, field);
+        this._errorsManager.clearErrors(); // Ensure no lingering errors
         this._notifySubscribers();
         if (this._debug) {
           console.log(
@@ -212,9 +210,10 @@ export class FormSchema<T extends FormSchemaOptions> {
         return _parsedValue;
       }
       // If validation fails for the whole form (due to refined field or other issues), throw the error.
-      const validationError = this.buildValidationError(
+      const validationError = buildValidationError(
         result.error,
-        String(field)
+        String(field),
+        this._debug
       );
       this._updateErrors(validationError); // Update errors for UI
       this._notifySubscribers();
@@ -230,7 +229,7 @@ export class FormSchema<T extends FormSchemaOptions> {
       const fieldSchema = this._fieldSchemas[field] as z.ZodType;
       const result = await fieldSchema.safeParseAsync(this._rawInput[field]);
       if (result.success) {
-        this._clearFieldError(String(field)); // Clear error for this specific field
+        this._errorsManager.clearErrors(); // Clear errors for this specific field
         this._notifySubscribers();
         if (this._debug) {
           console.log(
@@ -238,12 +237,13 @@ export class FormSchema<T extends FormSchemaOptions> {
             result.data
           );
         }
-        return result.data as SchemaOutput<T>[F];
+        return result.data as O[F];
       }
       // If validation fails for the individual field, throw the error.
-      const validationError = this.buildValidationError(
+      const validationError = buildValidationError(
         result.error,
-        String(field)
+        String(field),
+        this._debug
       );
       this._updateErrors(validationError); // Update error for this specific field
       this._notifySubscribers();
@@ -264,26 +264,33 @@ export class FormSchema<T extends FormSchemaOptions> {
    * @returns A promise that resolves to the parsed and validated data.
    * @throws ValidationError if validation fails.
    */
-  public async parse(
-    data: Partial<Record<keyof T, any>> | FormData
-  ): Promise<SchemaOutput<T>> {
+  public async parse(data: SchemaInput<O> | FormData): Promise<O> {
     if (this._debug) {
       console.log('parse called with external data:', data);
     }
     // Clear all errors before parsing external data
-    this._clearErrors();
+    this._errorsManager.clearErrors();
 
-    const formData = data instanceof Iterator ? Object.fromEntries(data) : data;
+    const formData =
+      data instanceof FormData &&
+      'entries' in data &&
+      typeof data['entries'] === 'function'
+        ? Object.fromEntries(data.entries())
+        : data; // Handle FormData correctly
     const result = await this._schema.safeParseAsync(formData);
     if (result.success) {
-      this._clearErrors(); // Ensure no lingering errors
+      this._errorsManager.clearErrors(); // Ensure no lingering errors
       this._notifySubscribers();
       if (this._debug) {
         console.log('parse success:', result.data);
       }
-      return result.data as SchemaOutput<T>;
+      return result.data as O;
     }
-    const validationError = this.buildValidationError(result.error);
+    const validationError = buildValidationError(
+      result.error,
+      undefined,
+      this._debug
+    );
     this._updateErrors(validationError); // Update errors for UI
     this._notifySubscribers();
     if (this._debug) {
@@ -303,7 +310,7 @@ export class FormSchema<T extends FormSchemaOptions> {
     check: (data: z.infer<typeof this._schema>) => boolean | Promise<boolean>,
     message: {
       code: string;
-      path: keyof T | NonEmptyArray<keyof T>;
+      path: keyof O | NonEmptyArray<keyof O>;
       params?: {
         [k: string]: any;
       };
@@ -333,7 +340,7 @@ export class FormSchema<T extends FormSchemaOptions> {
    * It also triggers a full form validation and updates error state.
    * @param newValues The new raw input values to set.
    */
-  public setRawValue(newValues: Partial<SchemaInput<T>>): void {
+  public setRawValue(newValues: SchemaInput<O>): void {
     this._rawInput = { ...newValues };
     if (this._debug) {
       console.log('setRawValue called with:', newValues);
@@ -357,7 +364,7 @@ export class FormSchema<T extends FormSchemaOptions> {
    * It also triggers a full form validation and updates error state.
    * @param partialValues The partial raw input values to merge.
    */
-  public mergeRawValue(partialValues: Partial<SchemaInput<T>>): void {
+  public mergeRawValue(partialValues: SchemaInput<O>): void {
     this._rawInput = { ...this._rawInput, ...partialValues };
     if (this._debug) {
       console.log('mergeRawValue called with:', partialValues);
@@ -381,16 +388,16 @@ export class FormSchema<T extends FormSchemaOptions> {
    * @param field The name of the field for which to create a setter.
    * @returns A function that takes a value (of SchemaInput type) and updates the corresponding field.
    */
-  setValueFor<F extends keyof T>(field: F) {
+  setValueFor<F extends keyof O>(field: F) {
     // Return cached setter if available for performance.
     if (this._setterCache.has(field)) {
       // Return the cached setter (type asserted for specific field).
       return this._setterCache.get(field) as (
-        value: SchemaInput<T>[F] // Setter expects SchemaInput type
+        value: SchemaInput<O>[F] // Setter expects SchemaInput type
       ) => void;
     }
     // Create and cache a new setter function.
-    const setter = (value: SchemaInput<T>[F]) => {
+    const setter = (value: SchemaInput<O>[F]) => {
       this._rawInput[field] = value;
       if (this._debug) {
         console.log(`setValueFor '${String(field)}' called with:`, value);
@@ -415,7 +422,7 @@ export class FormSchema<T extends FormSchemaOptions> {
     };
     this._setterCache.set(
       field,
-      setter as (value: SchemaOutput<T>[keyof T]) => void
+      setter as (value: SchemaInput<O>[keyof O]) => void
     );
 
     return setter;
@@ -426,7 +433,7 @@ export class FormSchema<T extends FormSchemaOptions> {
    * This effectively overwrites the current state and clears all errors.
    * @param initialValues Optional. New initial values to reset the form to. If not provided, resets to empty.
    */
-  public reset(initialValues?: Partial<SchemaInput<T>>): void {
+  public reset(initialValues?: SchemaInput<O>): void {
     if (this._debug) {
       console.log('reset called with initialValues:', initialValues);
     }
@@ -452,25 +459,27 @@ export class FormSchema<T extends FormSchemaOptions> {
    * or a `ValidationError` instance if validation fails.
    */
   public async validate(): Promise<undefined | ValidationError>;
-  public async validate<F extends keyof T>(
+  public async validate<F extends keyof O>(
     field: F
   ): Promise<undefined | ValidationError>;
   public async validate(
-    input: Partial<SchemaInput<T>>
+    input: SchemaInput<O>
   ): Promise<undefined | ValidationError>;
-  public async validate<F extends keyof T>(
+  public async validate<F extends keyof O>(
     field: F,
-    value: SchemaInput<T>[F]
+    value: SchemaInput<O>[F]
   ): Promise<undefined | ValidationError>;
-  public async validate<F extends keyof T>(
-    arg1?: F | Partial<SchemaInput<T>>,
-    arg2?: SchemaInput<T>[F]
+  public async validate<F extends keyof O>(
+    arg1?: F | SchemaInput<O>,
+    arg2?: SchemaInput<O>[F]
   ): Promise<undefined | ValidationError> {
-    if (this._debug) console.log('validate called with args:', { arg1, arg2 });
+    if (this._debug) {
+      console.log('validate called with args:', { arg1, arg2 });
+    }
 
-    let inputToValidate: Partial<SchemaInput<T>>;
+    let inputToValidate: SchemaInput<O>;
     let fieldToValidate: F | undefined;
-    let valueToValidate: SchemaInput<T>[F] | undefined;
+    let valueToValidate: SchemaInput<O>[F] | undefined;
     let shouldClearAllErrors = false; // Flag to decide if all internal errors should be cleared
 
     // Determine which overload is being used and set up variables accordingly.
@@ -482,11 +491,11 @@ export class FormSchema<T extends FormSchemaOptions> {
       // Case 2: validate(field: F) - Validate internal _rawInput for a specific field.
       fieldToValidate = arg1 as F;
       inputToValidate = this._rawInput; // Need full rawInput for potential refined fields.
-      this._clearFieldError(String(fieldToValidate)); // Clear specific field error
+      this._errorsManager.clearErrors(); // Clear specific field error
     } else if (typeof arg1 === 'object' && arg1 !== null) {
-      // Case 3: validate(input: Partial<SchemaInput<T>>) - Validate external rawInput object.
+      // Case 3: validate(input: SchemaInput<O>) - Validate external rawInput object.
       // Do not clear internal errors for this scenario as it's an external check.
-      inputToValidate = arg1 as Partial<SchemaInput<T>>;
+      inputToValidate = arg1 as SchemaInput<O>;
     } else if (typeof arg1 === 'string' && arg2 !== undefined) {
       // Case 4: validate(field: F, value: SchemaInput<T>[F]) - Validate external field-value pair.
       // Do not clear internal errors for this scenario as it's an external check.
@@ -499,8 +508,10 @@ export class FormSchema<T extends FormSchemaOptions> {
         [fieldToValidate]: valueToValidate,
       };
     } else {
-      const error = this.buildValidationError(
-        new Error('Invalid arguments provided to validate method.')
+      const error = buildValidationError(
+        new Error('Invalid arguments provided to validate method.'),
+        undefined,
+        this._debug
       );
       this._updateErrors(error);
       this._notifySubscribers();
@@ -512,14 +523,18 @@ export class FormSchema<T extends FormSchemaOptions> {
 
     try {
       if (shouldClearAllErrors) {
-        this._clearErrors(); // Apply global clear if flagged
+        this._errorsManager.clearErrors(); // Apply global clear if flagged
       }
 
       if (fieldToValidate === undefined) {
         // If no specific field is targeted, validate the entire determined input.
         const result = await this._schema.safeParseAsync(inputToValidate);
         if (!result.success) {
-          const validationError = this.buildValidationError(result.error);
+          const validationError = buildValidationError(
+            result.error,
+            undefined,
+            this._debug
+          );
           this._updateErrors(validationError);
           this._notifySubscribers();
           if (this._debug) {
@@ -527,7 +542,7 @@ export class FormSchema<T extends FormSchemaOptions> {
           }
           return validationError;
         }
-        this._clearErrors(); // Clear all errors if full validation passes
+        this._errorsManager.clearErrors(); // Clear all errors if full validation passes
       } else {
         // Validate a specific field.
         if (!(fieldToValidate in this._fieldSchemas)) {
@@ -554,7 +569,7 @@ export class FormSchema<T extends FormSchemaOptions> {
 
         // If the field is part of a refined schema, we must validate the full context (`inputToValidate`)
         // and then filter for errors specific to the targeted field.
-        if (this._refinedFields.includes(fieldToValidate)) {
+        if (this._refinedFields.includes(fieldToValidate as string)) {
           const result = await this._schema.safeParseAsync(inputToValidate);
           if (!result.success) {
             const fieldErrors = result.error.issues.filter((issue) => {
@@ -568,9 +583,10 @@ export class FormSchema<T extends FormSchemaOptions> {
             });
             if (fieldErrors.length > 0) {
               const zodError = new z.ZodError(fieldErrors);
-              const validationError = this.buildValidationError(
+              const validationError = buildValidationError(
                 zodError,
-                String(fieldToValidate)
+                String(fieldToValidate),
+                this._debug
               );
               this._updateErrors(validationError);
               this._notifySubscribers();
@@ -583,7 +599,7 @@ export class FormSchema<T extends FormSchemaOptions> {
               return validationError;
             }
           }
-          this._clearFieldError(String(fieldToValidate)); // Clear error for this specific field if refined context passes
+          this._errorsManager.clearErrors(); // Clear error for this specific field if refined context passes
         } else {
           // If the field is not refined, validate its individual schema.
           // Use `valueToValidate` if provided (for external field-value pair),
@@ -596,9 +612,10 @@ export class FormSchema<T extends FormSchemaOptions> {
 
           const result = await fieldSchema.safeParseAsync(value);
           if (!result.success) {
-            const validationError = this.buildValidationError(
+            const validationError = buildValidationError(
               result.error,
-              String(fieldToValidate)
+              String(fieldToValidate),
+              this._debug
             );
             this._updateErrors(validationError);
             this._notifySubscribers();
@@ -610,7 +627,7 @@ export class FormSchema<T extends FormSchemaOptions> {
             }
             return validationError;
           }
-          this._clearFieldError(String(fieldToValidate)); // Clear error for this specific field
+          this._errorsManager.clearErrors(); // Clear error for this specific field
         }
       }
       this._notifySubscribers(); // Notify if validation passes and errors might have been cleared
@@ -620,9 +637,10 @@ export class FormSchema<T extends FormSchemaOptions> {
       return undefined; // Validation successful, no error.
     } catch (e) {
       // Catch any unexpected errors that might occur during validation (e.g., in custom Zod transforms).
-      const error = this.buildValidationError(
+      const error = buildValidationError(
         e,
-        fieldToValidate ? String(fieldToValidate) : undefined
+        fieldToValidate ? String(fieldToValidate) : undefined,
+        this._debug
       );
       this._updateErrors(error);
       this._notifySubscribers();
@@ -634,64 +652,6 @@ export class FormSchema<T extends FormSchemaOptions> {
   }
 
   // Private Methods
-
-  /**
-   * Helper method to build a consistent ValidationError object from a ZodError or other unknown errors.
-   * @param e The error caught (can be ZodError or any other error).
-   * @param field Optional. The name of the field primarily associated with the error, if applicable.
-   * @returns A ValidationError instance.
-   */
-  private buildValidationError(e: unknown, field?: string): ValidationError {
-    if (this._debug)
-      console.log('buildValidationError called for:', e, 'field:', field);
-    if (e instanceof z.ZodError) {
-      return new ValidationError(
-        e.issues.map((issue) => {
-          const { path, code, message, ...params } = issue;
-          const origin =
-            'origin' in issue && typeof issue.origin === 'string'
-              ? issue.origin
-              : undefined;
-          const combinedCode = origin
-            ? [origin, code || ''].filter((a) => !!a).join('.')
-            : code || '';
-          return {
-            path: (path || []).join('.'), // Ensure path is a string for FieldError
-            code: combinedCode,
-            message,
-            origin,
-            params,
-          };
-        }),
-        e
-      );
-    }
-    // Handle generic errors or errors without a specific ZodError structure
-    const errorMessage = e instanceof Error ? e.message : String(e);
-    if (field) {
-      return new ValidationError(
-        [
-          {
-            path: field,
-            code: ValidationCode.UNEXPECTED, // Use a generic code for unexpected errors
-            message: errorMessage || 'An unexpected error occurred.',
-          },
-        ],
-        e
-      );
-    }
-    return new ValidationError(
-      [
-        {
-          path: '', // General form-level error
-          code: ValidationCode.UNEXPECTED,
-          message:
-            errorMessage || 'An unexpected error occurred during validation.',
-        },
-      ],
-      e
-    );
-  }
 
   /**
    * Provides direct access to the underlying Zod schema object.
@@ -712,48 +672,18 @@ export class FormSchema<T extends FormSchemaOptions> {
   }
 
   /**
-   * Clears all internal validation errors.
-   * This is a private helper, used by methods that re-validate the entire form.
-   */
-  private _clearErrors(): void {
-    this._errors = {};
-    if (this._debug) {
-      console.log('All errors cleared.');
-    }
-  }
-
-  /**
-   * Clears the error for a specific field path.
-   * This is a private helper, used by methods that validate individual fields.
-   * @param fieldPath The path of the field to clear the error for.
-   */
-  private _clearFieldError(fieldPath: string): void {
-    if (this._errors[fieldPath] !== undefined) {
-      delete this._errors[fieldPath];
-      if (this._debug) {
-        console.log(`Error for field '${fieldPath}' cleared.`);
-      }
-    }
-  }
-
-  /**
    * Updates the internal error state based on a ValidationError instance.
    * It clears existing errors and populates them with the new validation error issues.
    * @param validationError The ValidationError instance containing new errors, or undefined if no errors.
    */
   private _updateErrors(validationError: ValidationError | undefined): void {
-    this._clearErrors(); // Start by clearing all errors
+    this._errorsManager.clearErrors(); // Start by clearing all errors
 
-    // Corrected: Access `validationError.fields` instead of `validationError.errors`
+    // Corrected: Access `validationError.fields` which holds FieldError[]
     if (validationError && validationError.fields.length > 0) {
-      validationError.fields.forEach((err) => {
-        const fieldPath = err.path || ''; // Ensure path is a string
-        this._errors[fieldPath] = err.message;
-        if (this._debug) {
-          console.log(`Error updated for '${fieldPath}': ${err.message}`);
-        }
-      });
+      this._errorsManager.setErrors(validationError.fields);
     }
+    // If validationError is undefined or has no fields, _errorsManager is already cleared.
   }
 }
 

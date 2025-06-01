@@ -15,6 +15,9 @@
  */
 export type NonEmptyArray<T> = [T, ...T[]];
 
+/**
+ * Defines the structure of a single field error.
+ */
 export type FieldError = {
   /**
    * The field path that caused the error (e.g. "email", "user.name").
@@ -35,3 +38,5 @@ export type FieldError = {
    */
   params?: Record<string, unknown>;
 };
+
+export type SchemaInput<O> = Partial<O>;
