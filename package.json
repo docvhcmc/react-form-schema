@@ -1,5 +1,5 @@
 {
-  "name": "react-form-schema",
+  "name": "@docvhcmc/react-form-schema",
   "version": "0.1.0",
   "description": "A flexible React form schema manager with pluggable validation adapters (Zod, Yup, etc.)",
   "main": "dist/index.js",
