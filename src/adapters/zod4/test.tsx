@@ -1,15 +1,38 @@
 import { forwardRef, InputHTMLAttributes } from 'react';
-import { FieldError, SchemaOptions, useFormSchema } from './index';
+import { FieldError, FormSchema, SchemaOptions, useFormSchema } from './index';
 
 type UserFormOutput = {
   name: string;
   age: number;
+  password: string;
+  confirmPassword: string;
+  address: {
+    country: string;
+    district: string;
+  };
 };
 
-const userSchemaFactories: SchemaOptions<UserFormOutput> = {
-  name: (s) => s.string().min(1, 'Name is required'),
-  age: (s) => s.number().min(18, 'You must be at least 18'),
-};
+const userSchemaFactories: SchemaOptions<UserFormOutput> = [
+  {
+    name: (s) => s.string().min(1, 'Name is required'),
+    age: (s) => s.number().min(18, 'You must be at least 18'),
+    password: (s) => s.string().min(8),
+    confirmPassword: (s) => s.string(),
+    address: (s) =>
+      s.object({
+        country: s.string(),
+        district: s.string(),
+      }),
+  },
+  {
+    path: ['password', 'confirmPassword'],
+    code: 'PASSWORD_MISMATCH',
+    check: (data) => data.password === data.confirmPassword,
+    message: 'Passwords do not match',
+  },
+];
+
+const formSchema = new FormSchema(userSchemaFactories);
 
 interface InputProps<T> extends InputHTMLAttributes<HTMLInputElement> {
   label: string;

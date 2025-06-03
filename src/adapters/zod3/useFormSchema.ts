@@ -18,14 +18,21 @@ import { SchemaOptions } from './types';
  * @returns An object containing form values, error management functions, and submission handlers.
  */
 export function useFormSchema<O>(
-  fieldSchemas: SchemaOptions<O>,
+  fieldSchemas:
+    | SchemaOptions<O>
+    | [SchemaOptions<O>, ...Array<(s: FormSchema<O>['applyRule']) => void>],
   initialValues?: SchemaInput<O>,
   debug?: boolean // Pass debug flag to the FormSchema constructor
 ): UseFormSchemaReturn<O> {
   // Memoize the FormSchema instance to ensure it's stable across renders
   // unless the schema definition or initial values reference change.
   const formSchema = useMemo(
-    () => new FormSchema(fieldSchemas, initialValues, debug), // Pass debug here
+    () => {
+      if (Array.isArray(fieldSchemas)) {
+        return new FormSchema(fieldSchemas[0], initialValues, debug);
+      }
+      return new FormSchema(fieldSchemas, initialValues, debug);
+    },
     [fieldSchemas, initialValues, debug] // Include debug in dependencies
   );
 

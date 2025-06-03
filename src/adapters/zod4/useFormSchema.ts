@@ -12,21 +12,23 @@ import { SchemaOptions } from './types';
  * when its core dependencies (`fieldSchemas` or `initialValues` references) change.
  * This hook also manages the React state for errors and ensures components re-render
  * when the FormSchema instance's internal state (input values or errors) changes.
- * @param fieldSchemas The schema definitions for the form fields.
+ * @param schemaOptions The schema definitions for the form fields.
  * @param initialValues Optional initial values for the form.
  * @param debug Optional. If true, enables debug logging for the form schema instance.
  * @returns An object containing form values, error management functions, and submission handlers.
  */
 export function useFormSchema<O>(
-  fieldSchemas: SchemaOptions<O>,
+  schemaOptions: SchemaOptions<O>,
   initialValues?: SchemaInput<O>,
   debug?: boolean // Pass debug flag to the FormSchema constructor
 ): UseFormSchemaReturn<O> {
   // Memoize the FormSchema instance to ensure it's stable across renders
   // unless the schema definition or initial values reference change.
   const formSchema = useMemo(
-    () => new FormSchema(fieldSchemas, initialValues, debug), // Pass debug here
-    [fieldSchemas, initialValues, debug] // Include debug in dependencies
+    () => {
+      return new FormSchema(schemaOptions, initialValues, debug);
+    },
+    [schemaOptions, initialValues, debug] // Include debug in dependencies
   );
 
   // Use a state variable to force re-renders in consuming components

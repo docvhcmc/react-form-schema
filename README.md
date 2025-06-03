@@ -142,6 +142,8 @@ function UserProfileForm() {
 }
 ```
 
+## 🛠️ Advanced Usage
+
 ## ⚙️ API Reference
 
 ## 🤝 Contributing

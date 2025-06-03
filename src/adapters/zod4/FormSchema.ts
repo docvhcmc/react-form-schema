@@ -2,7 +2,7 @@ import { z } from 'zod/v4';
 import { ValidationCode } from '../../constants';
 import { FormErrorManager } from '../../core/FormErrorManager';
 import { ValidationError } from '../../errors';
-import { NonEmptyArray, SchemaInput } from '../../types';
+import { SchemaInput, ValidationRule } from '../../types';
 import { buildValidationError } from './buildValidationError';
 import { normalizeZodSchemaOptions } from './normalizeZodSchemaOptions';
 import { AnyZodObject, SchemaOptions } from './types';
@@ -44,18 +44,32 @@ export class FormSchema<O> {
 
   /**
    * Constructs a new FormSchema instance.
-   * @param fieldSchemas The raw schema definitions for each form field.
+   * @param schemaOptions The raw schema definitions for each form field, optionally followed by custom validation rules.
    * @param initialValues Optional initial values to pre-populate the form's raw input.
+   * @param debug Optional. If true, enables debug logging for the form schema instance.
    */
   constructor(
-    private readonly fieldSchemas: SchemaOptions<O>,
+    readonly schemaOptions: SchemaOptions<O>,
     initialValues?: Partial<SchemaInput<O>>,
     debug?: boolean
   ) {
-    this._fieldSchemas = normalizeZodSchemaOptions(fieldSchemas);
+    // Determine the field schemas from schemaOptions.
+    this._fieldSchemas = Array.isArray(schemaOptions)
+      ? normalizeZodSchemaOptions(schemaOptions[0])
+      : normalizeZodSchemaOptions(schemaOptions);
     this._schema = z.object(this._fieldSchemas);
+
     if (initialValues) {
       this._rawInput = { ...initialValues };
+    }
+
+    // Apply custom rules if they are provided as part of the schemaOptions array.
+    if (Array.isArray(schemaOptions)) {
+      // Extract rules from the rest of the array after the field schemas.
+      const [, ...rules] = schemaOptions;
+      rules.forEach((rule) => {
+        this.applyRule(rule);
+      });
     }
     this._debug =
       process.env.NODE_ENV === 'production' ? false : debug || false;
@@ -64,7 +78,7 @@ export class FormSchema<O> {
 
     if (this._debug) {
       console.log('FormSchema initialized with debug mode.', {
-        fieldSchemas,
+        schemaOptions,
         initialValues,
       });
     }
@@ -173,7 +187,7 @@ export class FormSchema<O> {
       throw validationError;
     } else {
       // Case 2: Retrieve a specific field's value
-      if (!(field in this.fieldSchemas)) {
+      if (!(field in this._fieldSchemas)) {
         const error = new ValidationError(
           [
             {
@@ -198,7 +212,7 @@ export class FormSchema<O> {
     if (this._refinedFields.includes(field as string)) {
       const result = await this._schema.safeParseAsync(this._rawInput);
       if (result.success) {
-        const _parsedValue: O[F] = (result.data as any)[field]; // get(result.data, field);
+        const _parsedValue: O[F] = (result.data as any)[field];
         this._errorsManager.clearErrors(); // Ensure no lingering errors
         this._notifySubscribers();
         if (this._debug) {
@@ -302,31 +316,31 @@ export class FormSchema<O> {
   /**
    * Applies a custom refinement rule to the entire schema.
    * This allows for cross-field validation or complex asynchronous checks.
-   * @param check The asynchronous or synchronous function to validate the parsed data.
-   * @param message The error message details (code, path, params) if validation fails.
+   * The rule definition includes the validation logic (`check`) and error details.
+   * @param rule The `ValidationRule` object containing the validation logic, path, code, and optional message/params.
    * @returns The current FormSchema instance for chaining.
    */
-  applyRule(
-    check: (data: z.infer<typeof this._schema>) => boolean | Promise<boolean>,
-    message: {
-      code: string;
-      path: keyof O | NonEmptyArray<keyof O>;
-      params?: {
-        [k: string]: any;
-      };
-    }
-  ): this {
-    const _path = (
-      Array.isArray(message.path) ? message.path : [message.path]
-    ).map(String); // Ensure path is an array of strings
+  applyRule(rule: ValidationRule<O>): this {
+    // Ensure path is an array of strings for Zod's `path` option.
+    const _path = (Array.isArray(rule.path) ? rule.path : [rule.path]).map(
+      String
+    );
     // Keep track of refined fields to ensure full schema validation when they change.
+    // This is crucial for optimizing `getValidatedValue` and `validate` methods.
     this._refinedFields.push(..._path);
+
     // Apply the refinement to the internal Zod schema.
-    this._schema = this._schema.refine(check, {
-      message: message.code || '',
-      params: message.params,
-      path: _path,
-    });
+    this._schema = this._schema.refine(
+      (data) => {
+        return rule.check(data as O);
+      },
+      {
+        message: rule.code || '',
+        params: rule.params,
+        path: _path,
+      }
+    );
+
     if (this._debug) {
       console.log('Refinement rule applied to paths:', _path);
     }

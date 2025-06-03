@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SchemaOptions, UnpackZodType } from './types';
+import { FieldSchemasOptions, UnpackZodType } from './types';
 
 /**
  * Normalizes the schema options by unpacking any Zod definitions
@@ -8,10 +8,12 @@ import { SchemaOptions, UnpackZodType } from './types';
  * @param obj - The raw schema options object.
  * @returns An object with unpacked Zod types for each key.
  */
-export function normalizeZodSchemaOptions<O>(obj: SchemaOptions<O>): {
-  [K in keyof O]: UnpackZodType<SchemaOptions<O>[K]>;
+export function normalizeZodSchemaOptions<O>(obj: FieldSchemasOptions<O>): {
+  [K in keyof O]: UnpackZodType<FieldSchemasOptions<O>[K]>;
 } {
-  const result = {} as { [K in keyof O]: UnpackZodType<SchemaOptions<O>[K]> };
+  const result = {} as {
+    [K in keyof O]: UnpackZodType<FieldSchemasOptions<O>[K]>;
+  };
 
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
@@ -20,7 +22,7 @@ export function normalizeZodSchemaOptions<O>(obj: SchemaOptions<O>): {
       // Otherwise, use the value directly.
       result[key] = (
         typeof value === 'function' ? value(z) : value
-      ) as UnpackZodType<SchemaOptions<O>[typeof key]>;
+      ) as UnpackZodType<FieldSchemasOptions<O>[typeof key]>;
     }
   }
 
