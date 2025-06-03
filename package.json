@@ -18,22 +18,22 @@
     },
     "./zod4": {
       "import": {
-        "types": "./dist/zod4.d.ts",
-        "default": "./dist/zod4.mjs"
+        "types": "./dist/zod4/index.d.ts",
+        "default": "./dist/zod4/index.mjs"
       },
       "require": {
-        "types": "./dist/zod4.d.ts",
-        "default": "./dist/zod4.js"
+        "types": "./dist/zod4/index.d.ts",
+        "default": "./dist/zod4/index.js"
       }
     },
     "./zod3": {
       "import": {
-        "types": "./dist/zod3.d.ts",
-        "default": "./dist/zod3.mjs"
+        "types": "./dist/zod3/index.d.ts",
+        "default": "./dist/zod3/index.mjs"
       },
       "require": {
-        "types": "./dist/zod3.d.ts",
-        "default": "./dist/zod3.js"
+        "types": "./dist/zod3/index.d.ts",
+        "default": "./dist/zod3/index.js"
       }
     },
     "./yup": {
@@ -74,7 +74,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/docvhcmc/react-form-schema.git"
+    "url": "git+https://github.com/docvhcmc/react-form-schema.git"
   },
   "peerDependencies": {
     "react": ">=18.0.0",
