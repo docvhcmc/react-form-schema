@@ -8,42 +8,52 @@
   "exports": {
     ".": {
       "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.mjs"
+        "types": "./dist/adapters/index.d.ts",
+        "default": "./dist/adapters/index.mjs"
       },
       "require": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
+        "types": "./dist/adapters/index.d.ts",
+        "default": "./dist/adapters/index.js"
       }
     },
     "./zod4": {
       "import": {
-        "types": "./dist/zod4/index.d.ts",
-        "default": "./dist/zod4/index.mjs"
+        "types": "./dist/adapters/zod4/index.d.ts",
+        "default": "./dist/adapters/zod4/index.mjs"
       },
       "require": {
-        "types": "./dist/zod4/index.d.ts",
-        "default": "./dist/zod4/index.js"
+        "types": "./dist/adapters/zod4/index.d.ts",
+        "default": "./dist/adapters/zod4/index.js"
       }
     },
     "./zod3": {
       "import": {
-        "types": "./dist/zod3/index.d.ts",
-        "default": "./dist/zod3/index.mjs"
+        "types": "./dist/adapters/zod3/index.d.ts",
+        "default": "./dist/adapters/zod3/index.mjs"
       },
       "require": {
-        "types": "./dist/zod3/index.d.ts",
-        "default": "./dist/zod3/index.js"
+        "types": "./dist/adapters/zod3/index.d.ts",
+        "default": "./dist/adapters/zod3/index.js"
       }
     },
     "./yup": {
       "import": {
-        "types": "./dist/yup.d.ts",
-        "default": "./dist/yup.mjs"
+        "types": "./dist/adapters/yup/index.d.ts",
+        "default": "./dist/adapters/yup/index.mjs"
       },
       "require": {
-        "types": "./dist/yup.d.ts",
-        "default": "./dist/yup.js"
+        "types": "./dist/adapters/yup/index.d.ts",
+        "default": "./dist/adapters/yup/index.js"
+      }
+    },
+    "./joi": {
+      "import": {
+        "types": "./dist/adapters/joi/index.d.ts",
+        "default": "./dist/adapters/joi/index.mjs"
+      },
+      "require": {
+        "types": "./dist/adapters/joi/index.d.ts",
+        "default": "./dist/adapters/joi/index.js"
       }
     },
     "./package.json": "./package.json"
@@ -52,8 +62,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts src/adapters/zod3/index.ts src/adapters/zod4/index.ts --format cjs,esm --dts --clean --out-dir dist",
-    "dev": "tsup src/index.ts src/adapters/zod3/index.ts src/adapters/zod4/index.ts --format cjs,esm --dts --watch --out-dir dist",
+    "build": "tsup src/index.ts src/adapters/zod3/index.ts src/adapters/zod4/index.ts src/adapters/yup/index.ts src/adapters/joi/index.ts --format cjs,esm --dts --clean --out-dir dist",
+    "dev": "tsup src/index.ts src/adapters/zod3/index.ts src/adapters/zod4/index.ts src/adapters/yup/index.ts src/adapters/joi/index.ts --format cjs,esm --dts --watch --out-dir dist",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

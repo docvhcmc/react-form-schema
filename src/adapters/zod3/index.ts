@@ -6,5 +6,4 @@ import { useFormSchema } from './useFormSchema';
 
 export type { FieldError, FormSchemaOutput, SchemaOptions };
 
-    export { FormSchema, useFormSchema, ValidationCode };
-
+export { FormSchema, useFormSchema, ValidationCode };
