@@ -12,12 +12,13 @@ type User = {
 };
 
 const schemaOptions: SchemaOptions<User> = {
-  name: (s) => s.string(),
-  age: (s) => s.number(),
+  name: (s) => s.string().max(16).min(6),
+  age: (s) => s.number().min(6),
 };
 
 const TextInput: React.FC<{
   label: string;
+  defaultValue?: string;
   onChangeValue: (value: string | undefined) => void;
   error?: string;
 }> = ({ label, onChangeValue, error }) => (
@@ -28,12 +29,13 @@ const TextInput: React.FC<{
       onChange={(e) => onChangeValue(e.target.value)}
       className="flex rounded border grow py-1.5 px-3 focus:outline-none text-white"
     />
-    {error && <span style={{ color: 'red' }}>{error}</span>}
+    {error && <span className="mt-1 text-red-800">{error}</span>}
   </div>
 );
 
 const NumberInput: React.FC<{
   label: string;
+  defaultValue?: number;
   onChangeValue: (value: number | undefined) => void;
   error?: string;
 }> = ({ label, onChangeValue, error }) => (
@@ -46,7 +48,7 @@ const NumberInput: React.FC<{
       }
       className="flex rounded border grow py-1.5 px-3 focus:outline-none text-white"
     />
-    {error && <span style={{ color: 'red' }}>{error}</span>}
+    {error && <span className="mt-1 text-red-800">{error}</span>}
   </div>
 );
 
@@ -63,11 +65,7 @@ function App() {
     validate, // To manually trigger validation
   } = useFormSchema(
     schemaOptions,
-    {
-      // Optional: initial values
-      name: 'John Doe',
-      age: 25,
-    },
+    undefined,
     true // Enable debug mode (optional, shows console logs)
   );
   // Function called on successful form submission
@@ -88,11 +86,12 @@ function App() {
       onSubmit={handleSubmit(onSubmitValid, onSubmitInvalid)}
       className="flex flex-row gap-4 justify-center"
     >
-      <div className="w-100">
+      <div className="w-1/3">
         <h2 className="mb-2">User Profile</h2>
         <div className="card">
           <TextInput
             label="Name:"
+            // defaultValue={}
             onChangeValue={setValueFor('name')}
             error={errors.getFirstFieldError('name')}
           />
@@ -101,13 +100,17 @@ function App() {
             onChangeValue={setValueFor('age')}
             error={errors.getFirstFieldError('name')}
           />
-          <button type="submit" disabled={!isValid}>
+          <button
+            type="submit"
+            disabled={!isValid}
+            className="rounded-md py-1.5 px-3 border text-white shadow-md cursor-pointer"
+          >
             Submit
           </button>
         </div>
       </div>
 
-      <div className="w-100">
+      <div className="w-2/3">
         <h2 className="mb-2">Current Form State:</h2>
         <pre className="card">
           <code>
