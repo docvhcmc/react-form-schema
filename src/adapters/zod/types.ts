@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from 'zod/v4';
 import { ValidationRule } from '../../types';
 
 export type ZodTypeBuilder = (zod: typeof z) => z.ZodType;

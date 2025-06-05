@@ -3,8 +3,9 @@ import { ValidationCode } from '../../constants';
 import { ValidationError } from '../../errors';
 import { UseFormSchemaReturn } from '../../interfaces/UseFormSchemaReturn';
 import { FieldError, SchemaInput } from '../../types';
+import { parseInputValue } from '../../utils/parseInputValue';
 import { FormSchema } from './FormSchema';
-import { SchemaOptions } from './types';
+import { FormSchemaDefinition } from './types';
 
 /**
  * React hook to create and manage a stable FormSchema instance.
@@ -18,7 +19,7 @@ import { SchemaOptions } from './types';
  * @returns An object containing form values, error management functions, and submission handlers.
  */
 export function useFormSchema<O>(
-  schemaOptions: SchemaOptions<O>,
+  schemaOptions: FormSchemaDefinition<O>,
   initialValues?: SchemaInput<O>,
   debug?: boolean // Pass debug flag to the FormSchema constructor
 ): UseFormSchemaReturn<O> {
@@ -86,6 +87,19 @@ export function useFormSchema<O>(
   // Expose isValid status
   const isValid = useMemo(() => formSchema.isValid, [formSchema, errors]); // isValid depends on errors state
 
+  const handleChange = useCallback(
+    (
+      event: React.ChangeEvent<
+        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+      >
+    ) => {
+      const newValue = parseInputValue(event);
+      const { name } = event.target;
+      formSchema.setValueFor(name as keyof O)(newValue);
+    },
+    [formSchema]
+  );
+
   // General submit handler that leverages FormSchema's parse method
   const handleSubmit = useCallback(
     (
@@ -133,6 +147,7 @@ export function useFormSchema<O>(
     rawInput: currentValues,
     isValid, // Direct access to the validation status
     errors: errors, // The memoized object with error utility methods
+    handleChange,
     handleSubmit,
     // onSubmitError is part of handleSubmit's signature, no need to expose separately
     reset: useCallback(() => formSchema.reset(), [formSchema]),

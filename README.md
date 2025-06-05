@@ -39,7 +39,7 @@ First, define your output interface:
 
 ```bash
 // schemas/user.ts
-import { SchemaOptions } from 'use-form-schema/zod4';
+import { SchemaOptions } from 'use-form-schema/zod';
 
 export interface UserFormOutput {
   name: string;
@@ -63,7 +63,7 @@ export const userSchemaFactories: SchemaOptions<UserFormOutput> = {
 ```bash
 // components/UserProfileForm.tsx
 import React from 'react';
-import { useFormSchema, FieldError, SchemaOptions } from 'react-form-schema/zod4';
+import { useFormSchema, FieldError, SchemaOptions } from 'react-form-schema/zod';
 
 const TextInput: React.FC<{ label: string; name: string; value: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; error?: string }> = ({ label, name, value, onChange, error }) => (
   <div>

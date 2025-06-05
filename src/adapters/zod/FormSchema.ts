@@ -4,8 +4,8 @@ import { FormErrorManager } from '../../core/FormErrorManager';
 import { ValidationError } from '../../errors';
 import { SchemaInput, ValidationRule } from '../../types';
 import { buildValidationError } from './buildValidationError';
-import { normalizeZodSchemaOptions } from './normalizeZodSchemaOptions';
-import { AnyZodObject, SchemaOptions } from './types';
+import { resolveFieldSchemas } from './resolveFieldSchemas';
+import { AnyZodObject, FormSchemaDefinition } from './types';
 
 /**
  * Core class for managing form state, validation, and data transformation using **Zod**.
@@ -49,14 +49,14 @@ export class FormSchema<O> {
    * @param debug Optional. If true, enables debug logging for the form schema instance.
    */
   constructor(
-    readonly schemaOptions: SchemaOptions<O>,
+    readonly schemaOptions: FormSchemaDefinition<O>,
     initialValues?: Partial<SchemaInput<O>>,
     debug?: boolean
   ) {
     // Determine the field schemas from schemaOptions.
     this._fieldSchemas = Array.isArray(schemaOptions)
-      ? normalizeZodSchemaOptions(schemaOptions[0])
-      : normalizeZodSchemaOptions(schemaOptions);
+      ? resolveFieldSchemas(schemaOptions[0])
+      : resolveFieldSchemas(schemaOptions);
     this._schema = z.object(this._fieldSchemas);
 
     if (initialValues) {

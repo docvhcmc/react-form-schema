@@ -16,14 +16,14 @@
         "default": "./dist/adapters/index.js"
       }
     },
-    "./zod4": {
+    "./zod": {
       "import": {
-        "types": "./dist/adapters/zod4/index.d.ts",
-        "default": "./dist/adapters/zod4/index.mjs"
+        "types": "./dist/adapters/zod/index.d.ts",
+        "default": "./dist/adapters/zod/index.mjs"
       },
       "require": {
-        "types": "./dist/adapters/zod4/index.d.ts",
-        "default": "./dist/adapters/zod4/index.js"
+        "types": "./dist/adapters/zod/index.d.ts",
+        "default": "./dist/adapters/zod/index.js"
       }
     },
     "./zod3": {
@@ -62,8 +62,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts src/adapters/zod3/index.ts src/adapters/zod4/index.ts src/adapters/yup/index.ts src/adapters/joi/index.ts --format cjs,esm --dts --clean --out-dir dist",
-    "dev": "tsup src/index.ts src/adapters/zod3/index.ts src/adapters/zod4/index.ts src/adapters/yup/index.ts src/adapters/joi/index.ts --format cjs,esm --dts --watch --out-dir dist",
+    "build": "tsup src/index.ts src/adapters/zod3/index.ts src/adapters/zod/index.ts src/adapters/yup/index.ts src/adapters/joi/index.ts --format cjs,esm --dts --clean --out-dir dist",
+    "dev": "tsup src/index.ts src/adapters/zod3/index.ts src/adapters/zod/index.ts src/adapters/yup/index.ts src/adapters/joi/index.ts --format cjs,esm --dts --watch --out-dir dist",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [

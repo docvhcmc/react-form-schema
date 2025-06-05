@@ -47,6 +47,13 @@ export interface UseFormSchemaReturn<O> {
     clearErrors: IFormErrorManager['clearErrors'];
   };
 
+  // === Change Handlers ===
+  handleChange: (
+    event: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >
+  ) => void;
+
   // === Submission Handlers ===
   /**
    * A higher-order function that returns an `onSubmit` handler for HTML forms.

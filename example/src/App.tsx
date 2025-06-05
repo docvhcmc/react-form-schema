@@ -1,20 +1,20 @@
-import { useFormSchema } from '@docvhcmc/react-form-schema/zod4';
+import { useFormSchema } from '@docvhcmc/react-form-schema/zod';
 import './index.css';
 
-import type {
-  FieldError,
-  SchemaOptions,
-} from '@docvhcmc/react-form-schema/zod4';
+import {
+  defineFormSchema,
+  type FieldError,
+} from '@docvhcmc/react-form-schema/zod';
 
 type User = {
   name: string;
   age: number;
 };
 
-const schemaOptions: SchemaOptions<User> = {
+const schemaOptions = defineFormSchema({
   name: (s) => s.string().max(16).min(6),
   age: (s) => s.number().min(6),
-};
+});
 
 const TextInput: React.FC<{
   label: string;
@@ -29,26 +29,7 @@ const TextInput: React.FC<{
       onChange={(e) => onChangeValue(e.target.value)}
       className="flex rounded border grow py-1.5 px-3 focus:outline-none text-white"
     />
-    {error && <span className="mt-1 text-red-800">{error}</span>}
-  </div>
-);
-
-const NumberInput: React.FC<{
-  label: string;
-  defaultValue?: number;
-  onChangeValue: (value: number | undefined) => void;
-  error?: string;
-}> = ({ label, onChangeValue, error }) => (
-  <div className="flex flex-col mb-4">
-    <label className="mb-2">{label}</label>
-    <input
-      type="number"
-      onChange={(e) =>
-        onChangeValue(e.target.value ? Number(e.target.value) : undefined)
-      }
-      className="flex rounded border grow py-1.5 px-3 focus:outline-none text-white"
-    />
-    {error && <span className="mt-1 text-red-800">{error}</span>}
+    {error && <span className="mt-1 text-red-400">{error}</span>}
   </div>
 );
 
@@ -57,12 +38,13 @@ function App() {
     rawInput,
     errors,
     isValid,
+    handleChange,
     handleSubmit,
     setValueFor, // Curried setter for individual fields
-    reset,
-    setRawValue, // To overwrite all values
-    mergeRawValue, // To partially update values
-    validate, // To manually trigger validation
+    // reset,
+    // setRawValue, // To overwrite all values
+    // mergeRawValue, // To partially update values
+    // validate, // To manually trigger validation
   } = useFormSchema(
     schemaOptions,
     undefined,
@@ -87,23 +69,32 @@ function App() {
       className="flex flex-row gap-4 justify-center"
     >
       <div className="w-1/3">
-        <h2 className="mb-2">User Profile</h2>
+        <h2 className="mb-2">User Profile Form</h2>
         <div className="card">
           <TextInput
             label="Name:"
-            // defaultValue={}
             onChangeValue={setValueFor('name')}
             error={errors.getFirstFieldError('name')}
           />
-          <NumberInput
-            label="Age:"
-            onChangeValue={setValueFor('age')}
-            error={errors.getFirstFieldError('name')}
-          />
+          <div className="flex flex-col mb-4">
+            <label className="mb-2">Age:</label>
+            <input
+              type="number"
+              name="age"
+              onChange={handleChange}
+              className="flex rounded border grow py-1.5 px-3 focus:outline-none text-white"
+            />
+            {errors.getFirstFieldError('age') && (
+              <span className="mt-1 text-red-400">
+                {errors.getFirstFieldError('age')}
+              </span>
+            )}
+          </div>
+
           <button
             type="submit"
             disabled={!isValid}
-            className="rounded-md py-1.5 px-3 border text-white shadow-md cursor-pointer"
+            className="rounded-md py-1.5 px-3 border text-white shadow-md cursor-pointer hover:bg-white hover:text-black"
           >
             Submit
           </button>
